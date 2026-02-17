@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#0a0a0f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>AgentDeck</title>
+  <link rel="manifest" href="/public/manifest.json">
+  <link rel="icon" href="/public/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="/public/icons/icon-192.png">
+  <link rel="stylesheet" href="/public/style.css">
+</head>
+<body>
+  <!-- Auth Screen -->
+  <div id="auth-screen">
+    <div class="auth-container">
+      <div class="auth-logo">&#x1F3AE;</div>
+      <h1>AgentDeck</h1>
+      <p class="auth-subtitle">Enter PIN to connect</p>
+      <div class="pin-input-wrap">
+        <input type="tel" id="pin-input" maxlength="4" pattern="[0-9]*" inputmode="numeric" autofocus placeholder="0000">
+      </div>
+      <button class="btn-primary" id="auth-btn">Connect</button>
+      <div class="auth-error" id="auth-error" hidden></div>
+    </div>
+  </div>
+
+  <!-- Main App -->
+  <div id="app" hidden>
+    <!-- Header -->
+    <header id="header">
+      <div class="header-left">
+        <span class="logo">&#x1F3AE;</span>
+        <span class="title">AgentDeck</span>
+        <span class="connection-dot" id="connection-status" title="Disconnected"></span>
+      </div>
+      <div class="header-right">
+        <select id="session-picker" class="session-select">
+          <option value="">No sessions</option>
+        </select>
+      </div>
+    </header>
+
+    <!-- Terminal -->
+    <div id="terminal-container"></div>
+
+    <!-- Permission Card (slides up when needed) -->
+    <div id="permission-card" class="permission-card" hidden>
+      <div class="permission-header">
+        <span class="permission-icon">&#x26A1;</span>
+        <span>Permission Request</span>
+        <button class="permission-close" id="permission-close">&times;</button>
+      </div>
+      <div class="permission-tool" id="permission-tool"></div>
+      <pre class="permission-detail" id="permission-detail"></pre>
+      <div class="permission-actions">
+        <button class="btn-allow" id="btn-allow">&#x2713; Allow</button>
+        <button class="btn-deny" id="btn-deny">&#x2717; Deny</button>
+      </div>
+    </div>
+
+    <!-- Quick Action Bar -->
+    <div id="action-bar">
+      <button class="action-btn" data-input="y">y</button>
+      <button class="action-btn" data-input="n">n</button>
+      <button class="action-btn" data-key="Enter">&#x21B5;</button>
+      <button class="action-btn" data-key="Escape">Esc</button>
+      <button class="action-btn" data-ctrl="c">^C</button>
+      <button class="action-btn" data-ctrl="d">^D</button>
+    </div>
+
+    <!-- Text Input -->
+    <div id="input-bar">
+      <input type="text" id="text-input" placeholder="Type here..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+      <button class="send-btn" id="send-btn">&#x2192;</button>
+    </div>
+  </div>
+
+  <!-- xterm.js from CDN -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5/css/xterm.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5/lib/xterm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0/lib/addon-fit.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-web-links@0/lib/addon-web-links.min.js"></script>
+
+  <script src="/public/app.js"></script>
+</body>
+</html>

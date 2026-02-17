@@ -1,0 +1,564 @@
+/* ═══════════════════════════════════════════
+   AgentDeck — Mobile-first Design System
+   ═══════════════════════════════════════════ */
+
+:root {
+  /* Core */
+  --bg-primary: #0a0a0f;
+  --bg-secondary: #12121a;
+  --bg-tertiary: #1a1a2e;
+  --bg-hover: #22223a;
+
+  /* Text */
+  --text-primary: #e8e8f0;
+  --text-secondary: #8888a0;
+  --text-accent: #a78bfa;
+
+  /* Brand — Claude Purple */
+  --accent: #a78bfa;
+  --accent-hover: #c4b5fd;
+  --accent-dim: rgba(167, 139, 250, 0.15);
+
+  /* Semantic */
+  --success: #34d399;
+  --success-dim: rgba(52, 211, 153, 0.15);
+  --danger: #f87171;
+  --danger-dim: rgba(248, 113, 113, 0.15);
+  --warning: #fbbf24;
+  --info: #60a5fa;
+
+  /* Terminal */
+  --terminal-bg: #000000;
+  --terminal-fg: #d4d4d8;
+  --terminal-cursor: #a78bfa;
+
+  /* Layout */
+  --radius: 12px;
+  --radius-sm: 8px;
+  --header-height: 52px;
+  --action-bar-height: 48px;
+  --input-height: 48px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-top: env(safe-area-inset-top, 0px);
+  --keyboard-height: 0px;
+
+  /* Fonts */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+}
+
+/* ── Reset ─────────────────────────────── */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ═══════════════════════════════════════════
+   Auth Screen
+   ═══════════════════════════════════════════ */
+
+#auth-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 24px;
+}
+
+.auth-container {
+  text-align: center;
+  max-width: 320px;
+  width: 100%;
+}
+
+.auth-logo {
+  font-size: 64px;
+  margin-bottom: 16px;
+}
+
+.auth-container h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.auth-subtitle {
+  color: var(--text-secondary);
+  margin-bottom: 32px;
+}
+
+.pin-input-wrap {
+  margin-bottom: 24px;
+}
+
+.pin-input-wrap input {
+  width: 160px;
+  font-size: 32px;
+  font-family: var(--font-mono);
+  text-align: center;
+  letter-spacing: 12px;
+  padding: 12px 16px;
+  background: var(--bg-secondary);
+  border: 2px solid var(--bg-hover);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.pin-input-wrap input:focus {
+  border-color: var(--accent);
+}
+
+.btn-primary {
+  width: 100%;
+  padding: 14px;
+  font-size: 16px;
+  font-weight: 600;
+  background: var(--accent);
+  color: #000;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-primary:hover {
+  background: var(--accent-hover);
+}
+
+.btn-primary:active {
+  transform: scale(0.98);
+}
+
+.auth-error {
+  margin-top: 16px;
+  color: var(--danger);
+  font-size: 14px;
+}
+
+/* ═══════════════════════════════════════════
+   Main App Layout
+   ═══════════════════════════════════════════ */
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  height: 100dvh;
+  padding-top: var(--safe-top);
+}
+
+/* ── Header ────────────────────────────── */
+
+#header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--header-height);
+  padding: 0 12px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--bg-tertiary);
+  flex-shrink: 0;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.logo {
+  font-size: 22px;
+}
+
+.title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.connection-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--danger);
+  transition: background 0.3s;
+}
+
+.connection-dot.connected {
+  background: var(--success);
+}
+
+.connection-dot.connecting {
+  background: var(--warning);
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.session-select {
+  padding: 6px 10px;
+  font-size: 13px;
+  font-family: var(--font-mono);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--bg-hover);
+  border-radius: var(--radius-sm);
+  outline: none;
+  max-width: 160px;
+}
+
+/* ── Terminal ──────────────────────────── */
+
+#terminal-container {
+  flex: 1;
+  min-height: 0;
+  background: var(--terminal-bg);
+  overflow: hidden;
+}
+
+/* xterm.js overrides for mobile */
+#terminal-container .xterm {
+  height: 100%;
+  padding: 4px;
+}
+
+#terminal-container .xterm-viewport {
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Permission Card ───────────────────── */
+
+.permission-card {
+  position: fixed;
+  bottom: calc(var(--action-bar-height) + var(--input-height) + var(--safe-bottom) + 8px);
+  left: 8px;
+  right: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid rgba(167, 139, 250, 0.3);
+  border-radius: var(--radius);
+  padding: 16px;
+  transform: translateY(calc(100% + 24px));
+  opacity: 0;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s;
+  z-index: 100;
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.5);
+}
+
+.permission-card.visible {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.permission-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--text-accent);
+  margin-bottom: 12px;
+}
+
+.permission-icon {
+  font-size: 18px;
+}
+
+.permission-close {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px 8px;
+  line-height: 1;
+}
+
+.permission-tool {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.permission-detail {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--bg-primary);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin-bottom: 16px;
+  max-height: 120px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  -webkit-overflow-scrolling: touch;
+}
+
+.permission-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-allow {
+  flex: 1;
+  padding: 14px;
+  border-radius: var(--radius-sm);
+  background: var(--success-dim);
+  color: var(--success);
+  border: 1px solid var(--success);
+  font-weight: 600;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background 0.15s;
+  min-height: 48px;
+}
+
+.btn-allow:hover {
+  background: rgba(52, 211, 153, 0.25);
+}
+
+.btn-allow:active {
+  transform: scale(0.97);
+}
+
+.btn-deny {
+  flex: 1;
+  padding: 14px;
+  border-radius: var(--radius-sm);
+  background: var(--danger-dim);
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  font-weight: 600;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background 0.15s;
+  min-height: 48px;
+}
+
+.btn-deny:hover {
+  background: rgba(248, 113, 113, 0.25);
+}
+
+.btn-deny:active {
+  transform: scale(0.97);
+}
+
+/* ── Quick Action Bar ──────────────────── */
+
+#action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: var(--action-bar-height);
+  padding: 0 8px;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--bg-tertiary);
+  flex-shrink: 0;
+}
+
+.action-btn {
+  padding: 8px 14px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--bg-hover);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 500;
+  min-height: 36px;
+  min-width: 44px;
+  cursor: pointer;
+  transition: background 0.1s;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.action-btn:hover {
+  background: var(--bg-hover);
+}
+
+.action-btn:active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  transform: scale(0.95);
+}
+
+/* ── Text Input ────────────────────────── */
+
+#input-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--input-height);
+  padding: 0 8px;
+  padding-bottom: var(--safe-bottom);
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--bg-tertiary);
+  flex-shrink: 0;
+}
+
+#text-input {
+  flex: 1;
+  height: 36px;
+  padding: 0 12px;
+  font-size: 14px;
+  font-family: var(--font-mono);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--bg-hover);
+  border-radius: var(--radius-sm);
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+#text-input:focus {
+  border-color: var(--accent);
+}
+
+.send-btn {
+  width: 40px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  color: #000;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.send-btn:hover {
+  background: var(--accent-hover);
+}
+
+.send-btn:active {
+  transform: scale(0.95);
+}
+
+/* ═══════════════════════════════════════════
+   Notification Toast
+   ═══════════════════════════════════════════ */
+
+.toast {
+  position: fixed;
+  top: calc(var(--header-height) + var(--safe-top) + 8px);
+  left: 8px;
+  right: 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--accent-dim);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  color: var(--text-primary);
+  font-size: 13px;
+  z-index: 200;
+  transform: translateY(-100%);
+  opacity: 0;
+  transition: transform 0.3s, opacity 0.2s;
+  pointer-events: none;
+}
+
+.toast.visible {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+/* ═══════════════════════════════════════════
+   Reconnect Overlay
+   ═══════════════════════════════════════════ */
+
+#reconnect-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(10, 10, 15, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+
+#reconnect-overlay.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.reconnect-message {
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.reconnect-message .spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--bg-hover);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 16px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ═══════════════════════════════════════════
+   Responsive — Tablet / Desktop
+   ═══════════════════════════════════════════ */
+
+@media (min-width: 768px) {
+  #action-bar {
+    justify-content: flex-start;
+    padding: 0 16px;
+  }
+
+  .action-btn {
+    padding: 8px 18px;
+  }
+
+  #input-bar {
+    padding: 0 16px;
+  }
+
+  .permission-card {
+    max-width: 480px;
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%) translateY(calc(100% + 24px));
+  }
+
+  .permission-card.visible {
+    transform: translateX(-50%) translateY(0);
+  }
+}
