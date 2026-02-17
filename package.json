@@ -34,7 +34,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/ijack-technologies/agentdeck.git"
+    "url": "https://github.com/mccarthysean/agentdeck.git"
   },
   "files": [
     "bin/",

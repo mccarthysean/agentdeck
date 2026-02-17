@@ -13,7 +13,7 @@ AgentDeck attaches to your tmux sessions via node-pty, streams the terminal to y
 One line. Installs everything (tmux, Node.js, curl) if not already present:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ijack-technologies/agentdeck/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/mccarthysean/agentdeck/main/install.sh | bash
 ```
 
 Or if you already have Node.js and tmux:
@@ -317,7 +317,7 @@ agentdeck/
 Contributions are welcome. Please open an issue to discuss larger changes before submitting a PR.
 
 ```bash
-git clone https://github.com/ijack-technologies/agentdeck.git
+git clone https://github.com/mccarthysean/agentdeck.git
 cd agentdeck
 bun install
 bun run dev   # Starts with --verbose
@@ -339,4 +339,4 @@ bun run dev   # Starts with --verbose
 
 ## License
 
-[MIT](LICENSE) -- IJACK Technologies
+[MIT](LICENSE) -- Sean McCarthy

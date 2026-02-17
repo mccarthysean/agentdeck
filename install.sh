@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # AgentDeck — One-line installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/ijack-technologies/agentdeck/main/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/mccarthysean/agentdeck/main/install.sh | bash
 set -e
 
 BOLD='\033[1m'
