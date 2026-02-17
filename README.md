@@ -10,7 +10,7 @@ AgentDeck attaches to your tmux sessions via node-pty, streams the terminal to y
 
 ## Install
 
-One line. Installs everything (tmux, Node.js, curl) if not already present:
+One line. Installs everything (tmux, Node.js, curl, cloudflared) if not already present:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/mccarthysean/agentdeck/main/install.sh | bash
@@ -32,7 +32,9 @@ That's it. No config files, no build step, no accounts.
 - **Push notifications** -- get notified instantly when Claude Code asks for permission
 - **One-tap approve/deny** -- respond to permission requests right from the notification
 - **Non-blocking** -- never stalls your agent; phone and terminal both work simultaneously
-- **Auto-tunnel** -- public HTTPS URL via localtunnel, no VPN or port forwarding needed
+- **Auto-tunnel** -- public HTTPS URL via Cloudflare Tunnel (no interstitial page), falls back to localtunnel
+- **QR code** -- scan from your phone to connect instantly, no typing URLs
+- **Auto-launch** -- configure your agent once (`agentdeck config --agent claude`), and it auto-creates a tmux session and launches it
 - **PIN authentication** -- random 4-digit PIN with HMAC-SHA256 session tokens
 - **Installable PWA** -- add to home screen, works offline-capable with Service Worker
 - **Session picker** -- switch between multiple tmux sessions from the phone
@@ -40,20 +42,21 @@ That's it. No config files, no build step, no accounts.
 - **Agent-agnostic** -- the tmux layer works with ANY terminal agent (Claude Code, Codex, Aider, etc.)
 - **Claude Code hooks** -- richer UX for Claude Code with push notifications and one-tap approve/deny
 - **Zero build step** -- vanilla JS frontend, xterm.js loaded from CDN
-- **4 dependencies** -- node-pty, ws, web-push, localtunnel
+- **5 dependencies** -- node-pty, ws, web-push, localtunnel, qrcode-terminal
 
 ---
 
 ## Quick Start
 
-### 1. Start your agent in tmux
+### 1. Configure your agent (one-time)
 
 ```bash
-tmux new -s claude
-claude   # or any coding agent
+npx agentdeck config --agent claude
 ```
 
-### 2. Run AgentDeck (in a second terminal)
+This saves "claude" as your default agent. Next time you run `agentdeck`, it will automatically create a tmux session and launch Claude Code.
+
+### 2. Run AgentDeck
 
 ```bash
 npx agentdeck
@@ -65,19 +68,24 @@ Output:
   AgentDeck -- Mobile control for your coding agents
   ------------------------------------------------
 
-  Server:     http://localhost:3300
+  Launching:  claude in tmux "agent"
+  Tunnel:     https://random-words.trycloudflare.com
+  Local:      http://localhost:3300
   PIN:        4821
-  Tunnel:     https://abc123.loca.lt
 
-  Open on phone: https://abc123.loca.lt
+  Scan to connect:
 
-  tmux sessions:
-     claude (claude) <- Claude Code
+  [QR CODE]
+
+  ------------------------------------------------
+  Press Ctrl+C to stop
 ```
 
-### 3. Open the URL on your phone
+### 3. Scan the QR code on your phone
 
 Enter the PIN. You now have a live terminal and push notifications.
+
+If you already have tmux sessions running, AgentDeck auto-detects them -- no need to configure an agent.
 
 ### 4. (Optional) Set up Claude Code hooks
 
@@ -114,17 +122,26 @@ Either way works. The agent is never blocked waiting for AgentDeck to decide. Th
 ## CLI Usage
 
 ```
-agentdeck                         Start server + auto-tunnel
-agentdeck setup                   Auto-configure Claude Code hooks
-agentdeck --port 3300             Custom port (default: 3300)
-agentdeck --pin 1234              Set PIN manually (default: random 4-digit)
-agentdeck --no-auth               Disable PIN authentication (trusted networks only)
-agentdeck --no-tunnel             Skip localtunnel (use with Tailscale, local network, etc.)
-agentdeck --subdomain myproject   Request a consistent tunnel URL
-agentdeck --verbose               Show debug output (HTTP requests, WS connections)
+agentdeck                           Start everything (server + tunnel + agent)
+agentdeck --agent claude            Start and launch "claude" in tmux
+agentdeck setup                     Auto-configure Claude Code hooks
+agentdeck config --agent claude     Save default agent (persists across runs)
+agentdeck --port 3300               Custom port (default: 3300)
+agentdeck --pin 1234                Set PIN manually (default: random 4-digit)
+agentdeck --no-auth                 Disable PIN authentication (trusted networks only)
+agentdeck --no-tunnel               Skip tunnel (use with Tailscale, local network, etc.)
+agentdeck --subdomain myproject     Request a consistent localtunnel URL
+agentdeck --verbose                 Show debug output (HTTP requests, WS connections)
 ```
 
 ### Examples
+
+Save a default agent so you never have to specify it again:
+
+```bash
+agentdeck config --agent claude
+agentdeck   # launches claude automatically
+```
 
 Run with a custom port and fixed PIN:
 
@@ -136,13 +153,6 @@ Local network only (no tunnel), auth disabled:
 
 ```bash
 agentdeck --no-tunnel --no-auth
-```
-
-Use a stable subdomain for bookmarking:
-
-```bash
-agentdeck --subdomain my-dev-machine
-# -> https://my-dev-machine.loca.lt
 ```
 
 ---
@@ -243,7 +253,7 @@ If the container has internet access, you can use `--subdomain` with localtunnel
 | Phone-optimized UI | Yes | No | Partial | Yes |
 | Push notifications | Yes | No | No | Yes |
 | One-tap approve/deny | Yes | No | No | Yes |
-| No port forwarding | Yes (localtunnel) | No | No | Yes (relay) |
+| No port forwarding | Yes (cloudflared) | No | No | Yes (relay) |
 | Works offline/disconnected | Yes (non-blocking) | N/A | N/A | No (blocking) |
 | Agent-agnostic | Yes (any tmux session) | Yes | Yes | Claude Code only |
 | Zero config networking | Yes | No | No | Yes |
@@ -263,7 +273,7 @@ AgentDeck is designed for personal use on development machines. The security mod
 - **No secrets in push notifications** -- push payloads contain only the tool name and a truncated summary (command name or file path). No source code or credentials are sent.
 - **VAPID keys** -- Web Push uses per-installation VAPID keys stored in `~/.agentdeck/vapid.json`. No third-party push service.
 - **Directory traversal protection** -- static file serving validates that resolved paths stay within the `public/` directory.
-- **localtunnel** -- the tunnel provides a public HTTPS URL. Combined with the PIN, this is suitable for personal use. For higher security, use `--no-tunnel` with Tailscale or a VPN.
+- **Cloudflare Tunnel** -- cloudflared quick tunnels provide a public HTTPS URL with no interstitial page. Combined with the PIN, this is suitable for personal use. Falls back to localtunnel if cloudflared is not installed. For higher security, use `--no-tunnel` with Tailscale or a VPN.
 - **Token per session** -- tokens are derived from the PIN using a per-startup random secret. Restarting the server invalidates all existing tokens.
 - **No persistent state** -- no database, no user accounts. Push subscriptions and VAPID keys in `~/.agentdeck/` are the only persisted data.
 
@@ -284,7 +294,8 @@ agentdeck/
 │   ├── push.js          # Web Push notification manager
 │   ├── auth.js          # PIN + HMAC-SHA256 authentication
 │   ├── protocol.js      # WebSocket message type definitions
-│   ├── tunnel.js        # localtunnel auto-reconnect wrapper
+│   ├── tunnel.js        # Cloudflare Tunnel / localtunnel wrapper
+│   ├── config.js        # Persistent configuration management
 │   └── setup.js         # Auto-configure Claude Code hooks
 ├── public/
 │   ├── index.html       # PWA shell

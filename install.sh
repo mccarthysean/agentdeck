@@ -111,6 +111,39 @@ else
   fi
 fi
 
+# ── Check / Install cloudflared (tunnel) ───────
+
+if command -v cloudflared &>/dev/null; then
+  log "cloudflared $(cloudflared --version 2>&1 | head -1 | awk '{print $3}') found"
+else
+  warn "cloudflared not found — installing..."
+  if command -v apt-get &>/dev/null; then
+    # Debian/Ubuntu — install from Cloudflare's repo
+    curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null 2>&1
+    echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared $(. /etc/os-release && echo $VERSION_CODENAME) main" | tee /etc/apt/sources.list.d/cloudflared.list >/dev/null 2>&1
+    apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq cloudflared >/dev/null 2>&1
+  elif command -v brew &>/dev/null; then
+    brew install cloudflared >/dev/null 2>&1
+  else
+    # Direct binary download as fallback
+    ARCH=$(uname -m)
+    case "$ARCH" in
+      x86_64)  CF_ARCH="amd64" ;;
+      aarch64) CF_ARCH="arm64" ;;
+      armv7l)  CF_ARCH="arm" ;;
+      *)       CF_ARCH="amd64" ;;
+    esac
+    curl -fsSL "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${CF_ARCH}" -o /usr/local/bin/cloudflared 2>/dev/null
+    chmod +x /usr/local/bin/cloudflared 2>/dev/null
+  fi
+
+  if command -v cloudflared &>/dev/null; then
+    log "cloudflared installed"
+  else
+    warn "cloudflared not installed — will fall back to localtunnel (has password page)"
+  fi
+fi
+
 # ── Install AgentDeck ──────────────────────────
 
 if command -v npx &>/dev/null; then

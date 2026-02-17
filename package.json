@@ -1,6 +1,6 @@
 {
   "name": "agentdeck",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Mobile control for your coding agents — monitor and approve from your phone",
   "bin": {
     "agentdeck": "./bin/cli.js"
@@ -11,10 +11,11 @@
     "dev": "node bin/cli.js --verbose"
   },
   "dependencies": {
+    "localtunnel": "^2.0.2",
     "node-pty": "^1.0.0",
-    "ws": "^8.16.0",
+    "qrcode-terminal": "^0.12.0",
     "web-push": "^3.6.7",
-    "localtunnel": "^2.0.2"
+    "ws": "^8.16.0"
   },
   "engines": {
     "node": ">=18"
