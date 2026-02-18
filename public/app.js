@@ -82,7 +82,6 @@ function showApp() {
   setupActionBar();
   setupTextInput();
   setupKeyboardHandler();
-  setupPushNotifications();
 }
 
 function showAuth() {
@@ -441,10 +440,15 @@ function setupTextInput() {
   var sendBtn = document.getElementById('send-btn');
 
   function send() {
-    if (input.value) {
-      sendMessage({ type: 'terminal_input', data: input.value + '\r' });
-      input.value = '';
-    }
+    var text = input.value;
+    if (!text) return;
+    input.value = '';
+    // Send text first, then Enter separately — more reliable with agents
+    // that process input character-by-character
+    sendMessage({ type: 'terminal_input', data: text });
+    setTimeout(function() {
+      sendMessage({ type: 'terminal_input', data: '\r' });
+    }, 30);
   }
 
   sendBtn.addEventListener('click', send);
@@ -453,7 +457,6 @@ function setupTextInput() {
       e.preventDefault();
       send();
     }
-    // Tab key
     if (e.key === 'Tab') {
       e.preventDefault();
       sendMessage({ type: 'terminal_input', data: '\t' });
@@ -479,43 +482,16 @@ function setupSessionPicker() {
 // Section 9: Push Notifications
 // ═══════════════════════════════════════════
 
-async function setupPushNotifications() {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
-
+// Unregister any existing service workers to stop stale push notifications.
+// Push notifications are disabled — ntfy handles phone notifications instead.
+async function cleanupServiceWorkers() {
+  if (!('serviceWorker' in navigator)) return;
   try {
-    var reg = await navigator.serviceWorker.register('/public/sw.js');
-
-    var res = await fetch('/api/push/vapid-key', {
-      headers: authHeaders(),
-    });
-    if (!res.ok) return;
-
-    var vapidData = await res.json();
-
-    var sub = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(vapidData.key),
-    });
-
-    await fetch('/api/push/subscribe', {
-      method: 'POST',
-      headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
-      body: JSON.stringify(sub),
-    });
-  } catch (err) {
-    console.log('Push notification setup failed:', err.message);
-  }
-}
-
-function urlBase64ToUint8Array(base64String) {
-  var padding = '='.repeat((4 - base64String.length % 4) % 4);
-  var base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-  var raw = atob(base64);
-  var arr = new Uint8Array(raw.length);
-  for (var i = 0; i < raw.length; i++) {
-    arr[i] = raw.charCodeAt(i);
-  }
-  return arr;
+    var regs = await navigator.serviceWorker.getRegistrations();
+    for (var reg of regs) {
+      await reg.unregister();
+    }
+  } catch (_) {}
 }
 
 // ═══════════════════════════════════════════
@@ -630,6 +606,9 @@ function init() {
 
   // Session picker
   setupSessionPicker();
+
+  // Clean up any stale push notification subscriptions
+  cleanupServiceWorkers();
 
   // Check for existing token
   if (state.token) {
