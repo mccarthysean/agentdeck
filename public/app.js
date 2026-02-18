@@ -2,9 +2,14 @@
 // AgentDeck — Mobile PWA Frontend
 // ═══════════════════════════════════════════
 
+// Global error handler — shows errors on screen for mobile debugging
+window.onerror = function(msg, url, line) {
+  console.error('AgentDeck error:', msg, 'line', line);
+};
+
 // Section 1: State Management
 // ═══════════════════════════════════════════
-const state = {
+var state = {
   token: localStorage.getItem('agentdeck-token'),
   ws: null,
   terminal: null,
@@ -14,6 +19,7 @@ const state = {
   reconnectAttempts: 0,
   maxReconnectAttempts: 15,
   reconnectTimer: null,
+  hasConnected: false,  // true after first successful WebSocket open
 };
 
 // ═══════════════════════════════════════════
@@ -21,25 +27,45 @@ const state = {
 // ═══════════════════════════════════════════
 
 async function authenticate(pin) {
+  var btn = document.getElementById('auth-btn');
+  btn.disabled = true;
+  btn.textContent = 'Connecting...';
+
   try {
-    const res = await fetch('/api/auth', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pin }),
+    var controller = new AbortController();
+    var timeout = setTimeout(function() { controller.abort(); }, 10000);
+
+    var res = await fetch('/api/auth?pin=' + encodeURIComponent(pin), {
+      signal: controller.signal,
     });
+    clearTimeout(timeout);
 
     if (!res.ok) {
-      const data = await res.json();
-      throw new Error(data.error || 'Authentication failed');
+      var errText = await res.text();
+      throw new Error(res.status === 401 ? 'Invalid PIN' : 'Server error: ' + res.status);
     }
 
-    const data = await res.json();
+    var data = await res.json();
+    if (!data.token) {
+      throw new Error('No token in response');
+    }
+
     state.token = data.token;
     localStorage.setItem('agentdeck-token', data.token);
+    // Close any stale WebSocket before switching to app
+    if (state.ws) {
+      try { state.ws.onclose = null; state.ws.close(); } catch(_) {}
+      state.ws = null;
+    }
+    state.hasConnected = false;
+    state.reconnectAttempts = 0;
     showApp();
     return true;
   } catch (err) {
-    showAuthError(err.message);
+    btn.disabled = false;
+    btn.textContent = 'Connect';
+    var msg = err.name === 'AbortError' ? 'Request timed out — server not responding' : (err.message || 'Connection failed');
+    showAuthError(msg);
     return false;
   }
 }
@@ -47,7 +73,11 @@ async function authenticate(pin) {
 function showApp() {
   document.getElementById('auth-screen').hidden = true;
   document.getElementById('app').hidden = false;
-  initTerminal();
+
+  if (typeof Terminal !== 'undefined') {
+    initTerminal();
+  }
+
   connect();
   setupActionBar();
   setupTextInput();
@@ -58,6 +88,12 @@ function showApp() {
 function showAuth() {
   document.getElementById('auth-screen').hidden = false;
   document.getElementById('app').hidden = true;
+  // Reset button state
+  var btn = document.getElementById('auth-btn');
+  if (btn) {
+    btn.disabled = false;
+    btn.textContent = 'Connect';
+  }
 }
 
 function showAuthError(message) {
@@ -142,8 +178,12 @@ function initTerminal() {
 // ═══════════════════════════════════════════
 
 function connect() {
-  if (state.ws && state.ws.readyState === WebSocket.OPEN) return;
-  if (state.ws && state.ws.readyState === WebSocket.CONNECTING) return;
+  // Close any existing connection first
+  if (state.ws) {
+    if (state.ws.readyState === WebSocket.OPEN) return; // already connected
+    try { state.ws.onclose = null; state.ws.onerror = null; state.ws.close(); } catch(_) {}
+    state.ws = null;
+  }
 
   setConnectionStatus('connecting');
 
@@ -155,6 +195,7 @@ function connect() {
   state.ws.onopen = function() {
     setConnectionStatus('connected');
     state.reconnectAttempts = 0;
+    state.hasConnected = true;
     hideReconnectOverlay();
 
     // Request resize to match terminal dimensions
@@ -170,11 +211,19 @@ function connect() {
   state.ws.onclose = function(e) {
     setConnectionStatus('disconnected');
 
-    // Auth failure
-    if (e.code === 1008 || e.code === 4001) {
+    // Auth failure — code 4001, 1008, or never successfully connected (stale token)
+    if (e.code === 1008 || e.code === 4001 || (!state.hasConnected && e.code !== 1000)) {
       localStorage.removeItem('agentdeck-token');
       state.token = null;
+      // Reset terminal state so fresh login works
+      if (state.terminal) {
+        state.terminal.dispose();
+        state.terminal = null;
+        state.fitAddon = null;
+      }
+      hideReconnectOverlay();
       showAuth();
+      showAuthError('Session expired — enter PIN again');
       return;
     }
 
@@ -250,7 +299,11 @@ function handleTerminalOutput(msg) {
 
 function handleTerminalCatchup(msg) {
   if (state.terminal && msg.data) {
+    // Clear terminal first, then write catch-up, then request a redraw
+    state.terminal.clear();
     state.terminal.write(msg.data);
+    // Ask tmux to redraw the screen (Ctrl+L equivalent sent to PTY)
+    sendMessage({ type: 'terminal_input', data: '\x0c' });
   }
 }
 

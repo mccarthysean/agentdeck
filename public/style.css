@@ -80,6 +80,10 @@ html, body {
   padding: 24px;
 }
 
+#auth-screen[hidden] {
+  display: none;
+}
+
 .auth-container {
   text-align: center;
   max-width: 320px;
