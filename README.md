@@ -30,7 +30,7 @@ That's it. No config files, no build step, no accounts.
 
 - **Live terminal on your phone** -- full xterm.js rendering with touch-friendly controls
 - **Push notifications** -- get notified instantly when Claude Code asks for permission (Web Push + ntfy)
-- **Phone notifications via ntfy** -- one flag (`--ntfy-topic`) sends urgent push notifications to the ntfy app on your phone. No account, no tokens, no third-party service signup.
+- **Phone notifications via ntfy** -- auto-enabled from your git email. Install the ntfy app, subscribe to the topic, done. No account, no tokens, no third-party service signup.
 - **One-tap approve/deny** -- respond to permission requests right from the notification
 - **Non-blocking** -- never stalls your agent; phone and terminal both work simultaneously
 - **Auto-tunnel** -- public HTTPS URL via Cloudflare Tunnel (no interstitial page), falls back to localtunnel
@@ -88,25 +88,17 @@ Enter the PIN. You now have a live terminal and push notifications.
 
 If you already have tmux sessions running, AgentDeck auto-detects them -- no need to configure an agent.
 
-### 4. (Optional) Set up Claude Code hooks
+### 4. (Optional) Set up Claude Code hooks + phone notifications
 
 ```bash
 npx agentdeck setup
 ```
 
-This configures Claude Code to POST permission requests to AgentDeck, enabling push notifications and one-tap approve/deny.
+This does two things:
+1. Configures Claude Code hooks to POST permission requests to AgentDeck
+2. Auto-generates an ntfy topic from your git email (e.g., `claude-a1b2c3d4e5f6`)
 
-### 5. (Optional) Phone notifications via ntfy
-
-Get push notifications on your phone when Claude needs permission or finishes a task:
-
-```bash
-npx agentdeck setup --ntfy-topic my-secret-topic
-```
-
-Then install the [ntfy app](https://ntfy.sh) on your phone and subscribe to `my-secret-topic`. That's it -- you'll get urgent notifications for permission requests and info notifications when the agent goes idle.
-
-The topic name is your secret. Pick something unguessable (e.g., `agentdeck-a7f3b9c2e1d4`).
+Install the [ntfy app](https://ntfy.sh) on your phone and subscribe to the topic shown. You'll get urgent notifications for permission requests and info notifications when the agent goes idle.
 
 ---
 
@@ -116,7 +108,7 @@ The topic name is your secret. Pick something unguessable (e.g., `agentdeck-a7f3
 Phone (PWA)  <-->  WebSocket  <-->  AgentDeck Server  <-->  node-pty  <-->  tmux session
                                           |         \
                                 Claude Code hooks    ntfy.sh --> phone notification
-                                POST here               (if --ntfy-topic set)
+                                POST here               (auto-enabled from git email)
 ```
 
 ### The non-blocking hook design
@@ -137,16 +129,17 @@ Either way works. The agent is never blocked waiting for AgentDeck to decide. Th
 ```
 agentdeck                           Start everything (server + tunnel + agent)
 agentdeck --agent claude            Start and launch "claude" in tmux
-agentdeck setup                     Auto-configure Claude Code hooks
-agentdeck setup --ntfy-topic TOPIC  Configure hooks + enable phone notifications
+agentdeck setup                     Configure hooks + auto-enable phone notifications
+agentdeck setup --ntfy-topic TOPIC  Configure hooks + use a custom ntfy topic
 agentdeck config --agent claude     Save default agent (persists across runs)
 agentdeck --port 3300               Custom port (default: 3300)
 agentdeck --pin 1234                Set PIN manually (default: random 4-digit)
 agentdeck --no-auth                 Disable PIN authentication (trusted networks only)
 agentdeck --no-tunnel               Skip tunnel (use with Tailscale, local network, etc.)
 agentdeck --subdomain myproject     Request a consistent localtunnel URL
-agentdeck --ntfy-topic TOPIC        Enable ntfy push notifications to this topic
+agentdeck --ntfy-topic TOPIC        Override auto-generated ntfy topic
 agentdeck --ntfy-url URL            Custom ntfy server (default: https://ntfy.sh)
+agentdeck --no-ntfy                 Disable ntfy notifications
 agentdeck --verbose                 Show debug output (HTTP requests, WS connections)
 ```
 
@@ -231,13 +224,19 @@ Restart Claude Code after configuring hooks.
 
 ### Setup (30 seconds)
 
-1. **Install the ntfy app** on your phone ([Android](https://play.google.com/store/apps/details?id=io.heckel.ntfy) / [iOS](https://apps.apple.com/app/ntfy/id1625396347))
-2. **Subscribe** to a topic in the app (e.g., `agentdeck-a7f3b9c2e1d4`)
-3. **Run setup** with the same topic name:
+1. **Run setup** -- AgentDeck auto-generates a topic from your git email:
 
 ```bash
-npx agentdeck setup --ntfy-topic agentdeck-a7f3b9c2e1d4
+npx agentdeck setup
 ```
+
+```
+  🔔 ntfy topic: claude-a1b2c3d4e5f6
+  Subscribe to this topic in the ntfy app on your phone.
+```
+
+2. **Install the ntfy app** on your phone ([Android](https://play.google.com/store/apps/details?id=io.heckel.ntfy) / [iOS](https://apps.apple.com/app/ntfy/id1625396347))
+3. **Subscribe** to the topic shown (e.g., `claude-a1b2c3d4e5f6`)
 
 That's it. AgentDeck now sends:
 - **Permission requests** -- priority 5 (urgent), buzzes immediately
@@ -257,9 +256,18 @@ If you run your own ntfy server, point AgentDeck at it:
 npx agentdeck setup --ntfy-topic my-topic --ntfy-url https://ntfy.example.com
 ```
 
+### How topics are generated
+
+The auto-generated topic is an MD5 hash of your `git config user.email`, truncated to 12 hex characters and prefixed with `claude-`. This is:
+- **Deterministic** -- same email always gives the same topic, so reinstalling doesn't break your phone subscription
+- **Private** -- the topic reveals nothing about your email address
+- **Unique** -- different developers get different topics
+
+You can override with `--ntfy-topic <name>` or disable with `--no-ntfy`.
+
 ### Security note
 
-ntfy topics on ntfy.sh are **public by default** -- anyone who knows (or guesses) your topic name can read your notifications. Use a long, random topic name. Notifications contain only the tool name and a short summary, never source code or credentials.
+ntfy topics on ntfy.sh are **public by default** -- anyone who knows (or guesses) your topic name can read your notifications. The auto-generated hash makes this very unlikely. Notifications contain only the tool name and a short summary, never source code or credentials.
 
 ---
 

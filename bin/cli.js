@@ -12,7 +12,7 @@ const args = process.argv.slice(2);
 // Subcommands
 // ═══════════════════════════════════════════
 
-// agentdeck setup [--port N] [--ntfy-topic TOPIC]
+// agentdeck setup [--port N] [--ntfy-topic TOPIC] [--no-ntfy]
 if (args[0] === 'setup') {
   console.log('');
   console.log('  \u{1F3AE} AgentDeck \u2014 Configuring Claude Code hooks');
@@ -21,12 +21,28 @@ if (args[0] === 'setup') {
   config.mergeCliArgs(cfg, args);
   setup({ port: cfg.port });
 
-  // Save ntfy config if provided
+  // Auto-generate ntfy topic unless --no-ntfy or already set via --ntfy-topic
+  if (!cfg.ntfyTopic && !args.includes('--no-ntfy')) {
+    const generated = config.generateNtfyTopic();
+    if (generated) {
+      cfg.ntfyTopic = generated;
+    }
+  }
+
+  // Save and display ntfy config
   if (cfg.ntfyTopic) {
     config.save(cfg);
     console.log('');
-    console.log(`  \u{1F514} ntfy:       enabled (topic: ${cfg.ntfyTopic})`);
-    console.log(`  Saved to:  ${config.CONFIG_PATH}`);
+    console.log(`  \u{1F514} ntfy topic: ${cfg.ntfyTopic}`);
+    console.log('  Subscribe to this topic in the ntfy app on your phone.');
+    console.log('  https://ntfy.sh');
+  } else if (args.includes('--no-ntfy')) {
+    console.log('');
+    console.log('  \u{1F514} ntfy:       disabled');
+  } else {
+    console.log('');
+    console.log('  \u{1F514} ntfy:       could not auto-detect git email');
+    console.log('  Use --ntfy-topic <name> to set a topic manually.');
   }
 
   process.exit(0);
@@ -62,8 +78,8 @@ if (args[0] === 'help' || args.includes('--help')) {
   Usage:
     agentdeck                           Start everything (server + tunnel + agent)
     agentdeck --agent claude            Start and launch "claude" in tmux
-    agentdeck setup                     Auto-configure Claude Code hooks
-    agentdeck setup --ntfy-topic TOPIC  Configure hooks + enable phone notifications
+    agentdeck setup                     Configure hooks + auto-enable phone notifications
+    agentdeck setup --ntfy-topic TOPIC  Configure hooks + use a custom ntfy topic
     agentdeck config --agent claude     Save default agent (persists across runs)
 
   Options:
@@ -75,8 +91,9 @@ if (args[0] === 'help' || args.includes('--help')) {
     --no-auth           Disable PIN authentication
     --no-tunnel         Skip localtunnel (use with Tailscale or local network)
     --verbose           Show debug output
-    --ntfy-topic <t>    Enable ntfy push notifications to this topic
+    --ntfy-topic <t>    Override auto-generated ntfy topic
     --ntfy-url <url>    ntfy server URL (default: https://ntfy.sh)
+    --no-ntfy           Disable ntfy notifications
 
   Config:
     agentdeck config --agent claude     Save "claude" as your default agent
@@ -84,8 +101,9 @@ if (args[0] === 'help' || args.includes('--help')) {
     Config file: ~/.agentdeck/config.json
 
   Phone notifications (ntfy):
-    agentdeck setup --ntfy-topic my-secret-topic
-    Then install the ntfy app and subscribe to "my-secret-topic".
+    agentdeck setup                     Auto-generates topic from git email
+    agentdeck setup --no-ntfy           Disable ntfy notifications
+    Then install the ntfy app and subscribe to the topic shown.
 
   Examples:
     agentdeck                           # Auto-detects running agent or starts configured one
@@ -141,6 +159,11 @@ async function main() {
 
   // ── Step 2: Start HTTP/WS server ───────────
 
+  // Auto-generate ntfy topic if not configured and not disabled
+  if (!cfg.ntfyTopic && !args.includes('--no-ntfy')) {
+    cfg.ntfyTopic = config.generateNtfyTopic();
+  }
+
   const server = new AgentDeckServer({
     port: cfg.port,
     pin: cfg.pin,
@@ -189,9 +212,9 @@ async function main() {
   }
 
   if (server.ntfy.enabled) {
-    console.log(`  \u{1F514} ntfy:       ${cfg.ntfyTopic} (${cfg.ntfyUrl})`);
+    console.log(`  \u{1F514} ntfy:       ${cfg.ntfyTopic}`);
   } else {
-    console.log('  \u{1F514} ntfy:       disabled (use --ntfy-topic to enable)');
+    console.log('  \u{1F514} ntfy:       disabled (run "agentdeck setup" to enable)');
   }
 
   console.log('');
