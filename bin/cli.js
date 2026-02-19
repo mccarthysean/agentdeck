@@ -12,7 +12,7 @@ const args = process.argv.slice(2);
 // Subcommands
 // ═══════════════════════════════════════════
 
-// agentdeck setup [--port N]
+// agentdeck setup [--port N] [--ntfy-topic TOPIC]
 if (args[0] === 'setup') {
   console.log('');
   console.log('  \u{1F3AE} AgentDeck \u2014 Configuring Claude Code hooks');
@@ -20,6 +20,15 @@ if (args[0] === 'setup') {
   const cfg = config.load();
   config.mergeCliArgs(cfg, args);
   setup({ port: cfg.port });
+
+  // Save ntfy config if provided
+  if (cfg.ntfyTopic) {
+    config.save(cfg);
+    console.log('');
+    console.log(`  \u{1F514} ntfy:       enabled (topic: ${cfg.ntfyTopic})`);
+    console.log(`  Saved to:  ${config.CONFIG_PATH}`);
+  }
+
   process.exit(0);
 }
 
@@ -54,6 +63,7 @@ if (args[0] === 'help' || args.includes('--help')) {
     agentdeck                           Start everything (server + tunnel + agent)
     agentdeck --agent claude            Start and launch "claude" in tmux
     agentdeck setup                     Auto-configure Claude Code hooks
+    agentdeck setup --ntfy-topic TOPIC  Configure hooks + enable phone notifications
     agentdeck config --agent claude     Save default agent (persists across runs)
 
   Options:
@@ -65,11 +75,17 @@ if (args[0] === 'help' || args.includes('--help')) {
     --no-auth           Disable PIN authentication
     --no-tunnel         Skip localtunnel (use with Tailscale or local network)
     --verbose           Show debug output
+    --ntfy-topic <t>    Enable ntfy push notifications to this topic
+    --ntfy-url <url>    ntfy server URL (default: https://ntfy.sh)
 
   Config:
     agentdeck config --agent claude     Save "claude" as your default agent
     agentdeck config --port 8080        Save custom port
     Config file: ~/.agentdeck/config.json
+
+  Phone notifications (ntfy):
+    agentdeck setup --ntfy-topic my-secret-topic
+    Then install the ntfy app and subscribe to "my-secret-topic".
 
   Examples:
     agentdeck                           # Auto-detects running agent or starts configured one
@@ -130,6 +146,8 @@ async function main() {
     pin: cfg.pin,
     noAuth: !cfg.auth,
     verbose: cfg.verbose,
+    ntfyTopic: cfg.ntfyTopic,
+    ntfyUrl: cfg.ntfyUrl,
   });
 
   try {
@@ -168,6 +186,12 @@ async function main() {
     console.log(`  \u{1F511} PIN:        ${server.auth.pin}`);
   } else {
     console.log('  \u{1F513} Auth:       disabled');
+  }
+
+  if (server.ntfy.enabled) {
+    console.log(`  \u{1F514} ntfy:       ${cfg.ntfyTopic} (${cfg.ntfyUrl})`);
+  } else {
+    console.log('  \u{1F514} ntfy:       disabled (use --ntfy-topic to enable)');
   }
 
   console.log('');

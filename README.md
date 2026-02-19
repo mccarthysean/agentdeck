@@ -29,7 +29,8 @@ That's it. No config files, no build step, no accounts.
 ## Features
 
 - **Live terminal on your phone** -- full xterm.js rendering with touch-friendly controls
-- **Push notifications** -- get notified instantly when Claude Code asks for permission
+- **Push notifications** -- get notified instantly when Claude Code asks for permission (Web Push + ntfy)
+- **Phone notifications via ntfy** -- one flag (`--ntfy-topic`) sends urgent push notifications to the ntfy app on your phone. No account, no tokens, no third-party service signup.
 - **One-tap approve/deny** -- respond to permission requests right from the notification
 - **Non-blocking** -- never stalls your agent; phone and terminal both work simultaneously
 - **Auto-tunnel** -- public HTTPS URL via Cloudflare Tunnel (no interstitial page), falls back to localtunnel
@@ -95,15 +96,27 @@ npx agentdeck setup
 
 This configures Claude Code to POST permission requests to AgentDeck, enabling push notifications and one-tap approve/deny.
 
+### 5. (Optional) Phone notifications via ntfy
+
+Get push notifications on your phone when Claude needs permission or finishes a task:
+
+```bash
+npx agentdeck setup --ntfy-topic my-secret-topic
+```
+
+Then install the [ntfy app](https://ntfy.sh) on your phone and subscribe to `my-secret-topic`. That's it -- you'll get urgent notifications for permission requests and info notifications when the agent goes idle.
+
+The topic name is your secret. Pick something unguessable (e.g., `agentdeck-a7f3b9c2e1d4`).
+
 ---
 
 ## How It Works
 
 ```
 Phone (PWA)  <-->  WebSocket  <-->  AgentDeck Server  <-->  node-pty  <-->  tmux session
-                                          |
-                                Claude Code hooks POST here
-                                (non-blocking, sends push notification)
+                                          |         \
+                                Claude Code hooks    ntfy.sh --> phone notification
+                                POST here               (if --ntfy-topic set)
 ```
 
 ### The non-blocking hook design
@@ -112,7 +125,7 @@ When Claude Code asks for permission (e.g., to run a shell command), this is wha
 
 1. The Claude Code hook POSTs the permission request to AgentDeck's `/api/hook` endpoint
 2. AgentDeck **immediately** responds with `{"decision": {"behavior": "ask"}}`, telling Claude to show its normal terminal prompt
-3. AgentDeck sends a push notification to your phone with the tool name and summary
+3. AgentDeck sends notifications in parallel: WebSocket toast to connected clients, Web Push, and ntfy (if configured)
 4. You can tap **Allow** on your phone (sends `y` keystroke to the PTY) or just type `y` in the terminal
 
 Either way works. The agent is never blocked waiting for AgentDeck to decide. This means AgentDeck can go offline, crash, or be slow -- your agent keeps working normally.
@@ -125,12 +138,15 @@ Either way works. The agent is never blocked waiting for AgentDeck to decide. Th
 agentdeck                           Start everything (server + tunnel + agent)
 agentdeck --agent claude            Start and launch "claude" in tmux
 agentdeck setup                     Auto-configure Claude Code hooks
+agentdeck setup --ntfy-topic TOPIC  Configure hooks + enable phone notifications
 agentdeck config --agent claude     Save default agent (persists across runs)
 agentdeck --port 3300               Custom port (default: 3300)
 agentdeck --pin 1234                Set PIN manually (default: random 4-digit)
 agentdeck --no-auth                 Disable PIN authentication (trusted networks only)
 agentdeck --no-tunnel               Skip tunnel (use with Tailscale, local network, etc.)
 agentdeck --subdomain myproject     Request a consistent localtunnel URL
+agentdeck --ntfy-topic TOPIC        Enable ntfy push notifications to this topic
+agentdeck --ntfy-url URL            Custom ntfy server (default: https://ntfy.sh)
 agentdeck --verbose                 Show debug output (HTTP requests, WS connections)
 ```
 
@@ -182,7 +198,7 @@ Add this to your Claude Code `settings.json`:
         "hooks": [
           {
             "type": "command",
-            "command": "curl -sS -X POST http://localhost:3300/api/hook -H 'Content-Type: application/json' -d @- || true",
+            "command": "curl -sS --max-time 5 -X POST http://localhost:3300/api/hook -H 'Content-Type: application/json' -d @- || true",
             "timeout": 10
           }
         ]
@@ -194,7 +210,7 @@ Add this to your Claude Code `settings.json`:
         "hooks": [
           {
             "type": "command",
-            "command": "curl -sS -X POST http://localhost:3300/api/hook -H 'Content-Type: application/json' -d @-"
+            "command": "curl -sS --max-time 5 -X POST http://localhost:3300/api/hook -H 'Content-Type: application/json' -d @- || true"
           }
         ]
       }
@@ -203,9 +219,47 @@ Add this to your Claude Code `settings.json`:
 }
 ```
 
-The `|| true` on PermissionRequest ensures Claude Code does not fail if AgentDeck is not running. The short timeout (10s) prevents delays.
+The `|| true` ensures Claude Code does not fail if AgentDeck is not running. The `--max-time 5` prevents curl from hanging if the server is unresponsive.
 
 Restart Claude Code after configuring hooks.
+
+---
+
+## Phone Notifications (ntfy)
+
+[ntfy](https://ntfy.sh) is a free, open-source push notification service. AgentDeck can send notifications to ntfy so you get alerted on your phone when Claude Code needs permission or goes idle -- no account required.
+
+### Setup (30 seconds)
+
+1. **Install the ntfy app** on your phone ([Android](https://play.google.com/store/apps/details?id=io.heckel.ntfy) / [iOS](https://apps.apple.com/app/ntfy/id1625396347))
+2. **Subscribe** to a topic in the app (e.g., `agentdeck-a7f3b9c2e1d4`)
+3. **Run setup** with the same topic name:
+
+```bash
+npx agentdeck setup --ntfy-topic agentdeck-a7f3b9c2e1d4
+```
+
+That's it. AgentDeck now sends:
+- **Permission requests** -- priority 5 (urgent), buzzes immediately
+- **Idle/completion notifications** -- priority 3 (default), silent badge
+
+### Dedup
+
+AgentDeck deduplicates notifications to prevent floods:
+- Only one notification per event type per 10 seconds
+- Idle notifications are suppressed for 3 minutes after a permission notification (you're already engaged)
+
+### Self-hosted ntfy
+
+If you run your own ntfy server, point AgentDeck at it:
+
+```bash
+npx agentdeck setup --ntfy-topic my-topic --ntfy-url https://ntfy.example.com
+```
+
+### Security note
+
+ntfy topics on ntfy.sh are **public by default** -- anyone who knows (or guesses) your topic name can read your notifications. Use a long, random topic name. Notifications contain only the tool name and a short summary, never source code or credentials.
 
 ---
 
@@ -291,6 +345,7 @@ agentdeck/
 │   ├── terminal.js      # node-pty <-> tmux bridge with ring buffer
 │   ├── tmux.js          # Session discovery and management
 │   ├── hooks.js         # Non-blocking Claude Code hook handler
+│   ├── ntfy.js          # ntfy push notification client (zero dependencies)
 │   ├── push.js          # Web Push notification manager
 │   ├── auth.js          # PIN + HMAC-SHA256 authentication
 │   ├── protocol.js      # WebSocket message type definitions
