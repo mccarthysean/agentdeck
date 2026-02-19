@@ -2,7 +2,7 @@
 
 const { AgentDeckServer } = require('../lib/server');
 const { startTunnel } = require('../lib/tunnel');
-const { setup } = require('../lib/setup');
+const { setup, getHookPort } = require('../lib/setup');
 const { listSessions, sessionExists, createSession } = require('../lib/tmux');
 const config = require('../lib/config');
 
@@ -182,6 +182,17 @@ async function main() {
       process.exit(1);
     }
     throw err;
+  }
+
+  // ── Port mismatch warning ───────────────────
+
+  const hookPort = getHookPort();
+  if (hookPort && hookPort !== cfg.port) {
+    console.log('  \x1b[33m\x1b[1m⚠  WARNING: Port mismatch!\x1b[0m');
+    console.log(`  \x1b[33mServer running on port ${cfg.port}, but hooks POST to port ${hookPort}.\x1b[0m`);
+    console.log(`  \x1b[33mHook notifications will not reach this server.\x1b[0m`);
+    console.log(`  \x1b[33mFix: agentdeck setup --port ${cfg.port}\x1b[0m`);
+    console.log('');
   }
 
   // ── Step 3: Start tunnel ───────────────────
