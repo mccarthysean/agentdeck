@@ -536,6 +536,30 @@ function showServerInfo(status) {
   const connectUrl = status.tunnelUrl || localUrl;
   showQrCode(connectUrl);
 
+  // Warn if QR code points to localhost (useless on phone)
+  if (!status.tunnelUrl) {
+    console.log('  \u{26A0}\u{FE0F}  No tunnel — QR code points to localhost (won\'t work on phone)');
+
+    // Diagnose why
+    const cfg = config.load();
+    if (!cfg.tunnel) {
+      console.log('     Tunnel is disabled in your config.');
+      console.log('     Fix: agentdeck config --no-tunnel  (remove this to re-enable)');
+      // Actually fix it by explaining the real command
+      console.log('     Or edit ~/.agentdeck/config.json and remove "tunnel": false');
+    } else {
+      try {
+        require('child_process').execSync('which cloudflared', { encoding: 'utf-8', timeout: 3000 });
+        console.log('     cloudflared is installed but tunnel failed to connect.');
+        console.log('     Check your network connection or try: agentdeck stop && agentdeck');
+      } catch {
+        console.log('     cloudflared is not installed. Install it:');
+        console.log('     sudo curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /usr/local/bin/cloudflared && sudo chmod +x /usr/local/bin/cloudflared');
+      }
+    }
+    console.log('');
+  }
+
   if (status.pin) {
     console.log(`  PIN: ${status.pin}`);
     console.log('');

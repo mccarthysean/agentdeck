@@ -1,6 +1,6 @@
 {
   "name": "agentdeck",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Mobile control for your coding agents — monitor and approve from your phone",
   "bin": {
     "agentdeck": "./bin/cli.js"
