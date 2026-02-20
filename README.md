@@ -61,9 +61,8 @@ agentdeck
 
 That's it. AgentDeck will:
 - Start a background server with a Cloudflare tunnel
-- Create a `claude-1` session running Claude Code
-- Attach you to the session
-- Show a QR code and PIN for your phone
+- Show a QR code and PIN — scan it to connect from your phone
+- Create a `claude-1` session and attach you
 
 Output:
 
@@ -80,6 +79,10 @@ Output:
 
   [QR CODE]
 
+  Tip: You can always view this again with: agentdeck status
+
+  Press Enter to launch your session...
+
   🚀 Created session: claude-1
 
   Attaching to claude-1... (detach: Ctrl+B d)
@@ -95,6 +98,12 @@ When you're done (or want to start another session), press **Ctrl+B d** to detac
     agentdeck                     Create a new session
     agentdeck status              Show QR code and sessions
     agentdeck stop                Stop the background server
+```
+
+**Using a different agent?** The default is `claude`, but you can change it:
+
+```bash
+agentdeck config --agent codex    # or aider, or any terminal command
 ```
 
 ### 2. (Optional) Set up hooks + phone notifications
@@ -214,10 +223,10 @@ Local network only (no tunnel), auth disabled:
 agentdeck --no-tunnel --no-auth
 ```
 
-Save a default agent so you never have to specify it:
+Use a different agent (default is `claude`):
 
 ```bash
-agentdeck config --agent claude
+agentdeck config --agent codex    # or aider, or any terminal command
 ```
 
 ---

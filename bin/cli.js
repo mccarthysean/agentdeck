@@ -99,7 +99,7 @@ if (args[0] === 'help' || args.includes('--help')) {
     agentdeck setup                     Configure hooks + auto-enable phone notifications
 
   Options:
-    --agent <cmd>       Command to launch in tmux (default: claude)
+    --agent <cmd>       Command to launch in sessions (default: claude)
     --port <n>          Server port (default: 3300)
     --pin <n>           Set PIN manually (default: random 4-digit)
     --subdomain <name>  Consistent tunnel URL across restarts
@@ -111,13 +111,14 @@ if (args[0] === 'help' || args.includes('--help')) {
     --no-ntfy           Disable ntfy notifications
 
   How it works:
-    1. First run: starts server in background, creates claude-1, attaches you
-    2. Next run: detects server, creates claude-2, attaches you
-    3. Detach with Ctrl+B d to return to your shell
-    4. Phone clients auto-update when new sessions appear
+    1. First run: starts server in background, shows QR code
+    2. Creates session (e.g., claude-1) and attaches you
+    3. Next run: detects server, creates next session (claude-2), attaches you
+    4. Detach with Ctrl+B d to return to your shell
+    5. Phone clients auto-update when new sessions appear
 
   Config:
-    agentdeck config --agent claude     Save "claude" as your default agent
+    agentdeck config --agent claude     Save default agent (or codex, aider, etc.)
     agentdeck config --port 8080        Save custom port
     Config file: ~/.agentdeck/config.json
 `);
@@ -272,13 +273,19 @@ async function orchestrator() {
     // Wait for tunnel URL to appear in status file
     const status = await waitForTunnel(15000);
     showServerInfo(status);
+
+    // Pause so the user can scan the QR code before the agent takes over
+    console.log('  Tip: You can always view this again with: agentdeck status');
+    console.log('');
+    await waitForEnter('  Press Enter to launch your session...');
+    console.log('');
   } else {
     const status = AgentDeckServer.readStatus();
     console.log('  Server already running');
     showServerInfo(status);
   }
 
-  // ── Step 2: Create Claude session ───────
+  // ── Step 2: Create agent session ───────
   const agent = cfg.agent || 'claude';
   const sessionName = nextSessionName(agent);
 
@@ -548,6 +555,17 @@ function showQrCode(url) {
     console.log(`  \u{1F4F1} Open on phone: ${url}`);
   }
   console.log('');
+}
+
+/**
+ * Wait for the user to press Enter.
+ */
+function waitForEnter(prompt) {
+  return new Promise(resolve => {
+    process.stdout.write(prompt);
+    const rl = require('readline').createInterface({ input: process.stdin });
+    rl.once('line', () => { rl.close(); resolve(); });
+  });
 }
 
 /**
