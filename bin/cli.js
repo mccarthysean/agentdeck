@@ -1,9 +1,13 @@
 #!/usr/bin/env node
 
-const { AgentDeckServer } = require('../lib/server');
+const http = require('http');
+const { AgentDeckServer, STATUS_PATH } = require('../lib/server');
 const { startTunnel } = require('../lib/tunnel');
 const { setup, getHookPort } = require('../lib/setup');
-const { listSessions, sessionExists, createSession } = require('../lib/tmux');
+const {
+  listSessions, sessionExists, createSession,
+  nextSessionName, attachSession, isTmuxInstalled,
+} = require('../lib/tmux');
 const config = require('../lib/config');
 
 const args = process.argv.slice(2);
@@ -70,21 +74,32 @@ if (args[0] === 'config') {
   process.exit(0);
 }
 
+// agentdeck status — show server info, QR, sessions
+if (args[0] === 'status') {
+  statusCommand();
+  process.exit(0);
+}
+
+// agentdeck stop — kill background server, preserve user sessions
+if (args[0] === 'stop') {
+  stopCommand();
+  process.exit(0);
+}
+
 // agentdeck help
 if (args[0] === 'help' || args.includes('--help')) {
   console.log(`
   \u{1F3AE} AgentDeck \u2014 Mobile control for your coding agents
 
   Usage:
-    agentdeck                           Start everything (server + tunnel + agent)
-    agentdeck --agent claude            Start and launch "claude" in tmux
+    agentdeck                           Start server + create session + attach
+    agentdeck                           (again) Detect server + new session + attach
+    agentdeck status                    Show QR code, PIN, tunnel URL, sessions
+    agentdeck stop                      Stop background server (sessions survive)
     agentdeck setup                     Configure hooks + auto-enable phone notifications
-    agentdeck setup --ntfy-topic TOPIC  Configure hooks + use a custom ntfy topic
-    agentdeck config --agent claude     Save default agent (persists across runs)
 
   Options:
-    --agent <cmd>       Command to launch in tmux (e.g., claude, aider, cursor)
-    --session <name>    tmux session name (default: agent)
+    --agent <cmd>       Command to launch in tmux (default: claude)
     --port <n>          Server port (default: 3300)
     --pin <n>           Set PIN manually (default: random 4-digit)
     --subdomain <name>  Consistent tunnel URL across restarts
@@ -95,69 +110,53 @@ if (args[0] === 'help' || args.includes('--help')) {
     --ntfy-url <url>    ntfy server URL (default: https://ntfy.sh)
     --no-ntfy           Disable ntfy notifications
 
+  How it works:
+    1. First run: starts server in background, creates claude-1, attaches you
+    2. Next run: detects server, creates claude-2, attaches you
+    3. Detach with Ctrl+B d to return to your shell
+    4. Phone clients auto-update when new sessions appear
+
   Config:
     agentdeck config --agent claude     Save "claude" as your default agent
     agentdeck config --port 8080        Save custom port
     Config file: ~/.agentdeck/config.json
-
-  Phone notifications (ntfy):
-    agentdeck setup                     Auto-generates topic from git email
-    agentdeck setup --no-ntfy           Disable ntfy notifications
-    Then install the ntfy app and subscribe to the topic shown.
-
-  Examples:
-    agentdeck                           # Auto-detects running agent or starts configured one
-    agentdeck --agent claude            # Launches Claude Code, shows QR, ready to scan
-    agentdeck --agent aider             # Works with any terminal agent
-    agentdeck --no-tunnel               # Local only (use Tailscale IP instead)
 `);
   process.exit(0);
 }
 
 // ═══════════════════════════════════════════
-// Main startup
+// Internal server mode: agentdeck --_server
+// Runs inside the hidden _agentdeck tmux session.
 // ═══════════════════════════════════════════
 
-async function main() {
-  // Load config file, then overlay CLI args
+if (args.includes('--_server')) {
+  serverMode().catch(err => {
+    console.error('  Fatal:', err.message);
+    if (args.includes('--verbose')) console.error(err.stack);
+    AgentDeckServer.deleteStatus();
+    process.exit(1);
+  });
+}
+
+// ═══════════════════════════════════════════
+// Default: Orchestrator mode
+// ═══════════════════════════════════════════
+
+else {
+  orchestrator().catch(err => {
+    console.error('  Fatal:', err.message);
+    if (args.includes('--verbose')) console.error(err.stack);
+    process.exit(1);
+  });
+}
+
+// ═══════════════════════════════════════════
+// Server mode (--_server)
+// ═══════════════════════════════════════════
+
+async function serverMode() {
   const cfg = config.load();
   config.mergeCliArgs(cfg, args);
-
-  console.log('');
-  console.log('  \u{1F3AE} AgentDeck \u2014 Mobile control for your coding agents');
-  console.log('  \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500');
-  console.log('');
-
-  // ── Step 1: Ensure tmux session with agent ──
-
-  const sessions = listSessions();
-  let targetSession = null;
-
-  if (sessions.length > 0) {
-    // Prefer a session already running a known agent
-    const agentSession = sessions.find(s => s.isClaude) || sessions[0];
-    targetSession = agentSession.name;
-    const marker = agentSession.isClaude ? ' (Claude Code)' : '';
-    console.log(`  \u{1F50D} Found:      tmux "${targetSession}"${marker}`);
-  } else if (cfg.agent) {
-    // No sessions — create one with the configured agent
-    targetSession = cfg.session || 'agent';
-    console.log(`  \u{1F680} Launching:  ${cfg.agent} in tmux "${targetSession}"`);
-    createSession(targetSession, cfg.agent);
-  } else {
-    // No sessions, no agent configured
-    console.log('  \u{1F50D} No tmux sessions found');
-    console.log('');
-    console.log('  To auto-launch an agent, configure one:');
-    console.log('    agentdeck config --agent claude');
-    console.log('  Or start manually:');
-    console.log('    tmux new -s agent && claude');
-    console.log('');
-    console.log('  Starting server anyway (will attach when a session appears)...');
-    console.log('');
-  }
-
-  // ── Step 2: Start HTTP/WS server ───────────
 
   // Auto-generate ntfy topic if not configured and not disabled
   if (!cfg.ntfyTopic && !args.includes('--no-ntfy')) {
@@ -178,104 +177,389 @@ async function main() {
   } catch (err) {
     if (err.code === 'EADDRINUSE') {
       console.error(`  Error: Port ${cfg.port} is already in use`);
-      console.error(`  Try: agentdeck --port ${cfg.port + 1}`);
       process.exit(1);
     }
     throw err;
   }
 
-  // ── Port mismatch warning ───────────────────
+  // Write initial status (no tunnel URL yet)
+  server.writeStatus();
 
+  // Start periodic session refresh for phone clients
+  server.startSessionRefresh();
+
+  console.log(`  AgentDeck server running on port ${cfg.port} (pid ${process.pid})`);
+
+  // Port mismatch warning
   const hookPort = getHookPort();
   if (hookPort && hookPort !== cfg.port) {
-    console.log('  \x1b[33m\x1b[1m⚠  WARNING: Port mismatch!\x1b[0m');
-    console.log(`  \x1b[33mServer running on port ${cfg.port}, but hooks POST to port ${hookPort}.\x1b[0m`);
-    console.log(`  \x1b[33mHook notifications will not reach this server.\x1b[0m`);
-    console.log(`  \x1b[33mFix: agentdeck setup --port ${cfg.port}\x1b[0m`);
-    console.log('');
+    console.log(`  WARNING: Hooks POST to port ${hookPort}, server on ${cfg.port}`);
+    console.log(`  Fix: agentdeck setup --port ${cfg.port}`);
   }
 
-  // ── Step 3: Start tunnel ───────────────────
-
-  let tunnelUrl = null;
+  // Start tunnel
   if (cfg.tunnel) {
-    process.stdout.write('  \u{1F310} Tunnel:     connecting...');
+    console.log('  Connecting tunnel...');
     const tunnel = await startTunnel(cfg.port, { subdomain: cfg.subdomain });
     if (tunnel) {
-      tunnelUrl = tunnel.url;
-      process.stdout.write('\r\x1b[2K');
-      console.log(`  \u{1F310} Tunnel:     ${tunnelUrl}`);
+      server.setTunnelUrl(tunnel.url);
+      console.log(`  Tunnel: ${tunnel.url}`);
     } else {
-      process.stdout.write('\r\x1b[2K');
-      console.log('  \u{1F310} Tunnel:     unavailable (local only)');
+      console.log('  Tunnel: unavailable (local only)');
+      // Re-write status to confirm no tunnel
+      server.writeStatus();
+    }
+  } else {
+    // No tunnel — write final status
+    server.writeStatus();
+  }
+
+  // Graceful shutdown
+  const shutdown = async () => {
+    console.log('\n  Shutting down...');
+    await server.stop();
+    process.exit(0);
+  };
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
+}
+
+// ═══════════════════════════════════════════
+// Orchestrator mode (default)
+// ═══════════════════════════════════════════
+
+async function orchestrator() {
+  const cfg = config.load();
+  config.mergeCliArgs(cfg, args);
+
+  // Pre-flight: tmux required
+  if (!isTmuxInstalled()) {
+    console.error('');
+    console.error('  Error: tmux is not installed');
+    console.error('  Install it: sudo apt install tmux  (or brew install tmux)');
+    console.error('');
+    process.exit(1);
+  }
+
+  console.log('');
+  console.log('  \u{1F3AE} AgentDeck');
+  console.log('  \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500');
+  console.log('');
+
+  // ── Step 1: Ensure server is running ────
+  const serverRunning = await isServerRunning(cfg.port);
+
+  if (!serverRunning) {
+    console.log('  Starting server...');
+
+    // Build the command for the hidden tmux session
+    const scriptPath = process.argv[1];
+    const serverArgs = forwardArgs();
+    const serverCmd = `${process.argv[0]} ${scriptPath} --_server ${serverArgs}`;
+
+    createSession('_agentdeck', serverCmd);
+
+    // Wait for server to become healthy
+    const healthy = await waitForServer(cfg.port, 20000);
+    if (!healthy) {
+      console.error('');
+      console.error('  Error: Server failed to start within 20s');
+      console.error('  Check logs: tmux attach -t _agentdeck');
+      console.error('');
+      process.exit(1);
+    }
+
+    // Wait for tunnel URL to appear in status file
+    const status = await waitForTunnel(15000);
+    showServerInfo(status);
+  } else {
+    const status = AgentDeckServer.readStatus();
+    console.log('  Server already running');
+    showServerInfo(status);
+  }
+
+  // ── Step 2: Create Claude session ───────
+  const agent = cfg.agent || 'claude';
+  const sessionName = nextSessionName(agent);
+
+  // Retry loop for race condition (two terminals creating simultaneously)
+  let created = false;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const name = attempt === 0 ? sessionName : nextSessionName(agent);
+    try {
+      createSession(name, agent);
+      console.log(`  \u{1F680} Created session: ${name}`);
+      console.log('');
+
+      // ── Step 3: Attach to the session ─────
+      console.log(`  Attaching to ${name}... (detach: Ctrl+B d)`);
+      console.log('');
+
+      attachSession(name);
+      created = true;
+
+      // User detached — show hints
+      console.log('');
+      console.log('  \u{1F44B} Detached from ' + name);
+      console.log('');
+      console.log('  Quick commands:');
+      console.log(`    tmux attach -t ${name}       Re-attach to this session`);
+      console.log('    agentdeck                    Create a new session');
+      console.log('    agentdeck status             Show QR code and sessions');
+      console.log('    agentdeck stop               Stop the background server');
+      console.log('');
+      break;
+    } catch (err) {
+      if (attempt < 2 && err.message && err.message.includes('duplicate')) {
+        continue; // Try next name
+      }
+      // If attach fails (e.g., session ended), that's fine
+      if (attempt === 0) {
+        created = true; // Session was created even if attach failed
+        console.log(`  Session ${name} exited.`);
+      }
+      break;
     }
   }
 
-  const localUrl = `http://localhost:${cfg.port}`;
-  console.log(`  \u{1F4E1} Local:      ${localUrl}`);
+  if (!created) {
+    console.error('  Error: Could not create session');
+    process.exit(1);
+  }
+}
 
-  // ── Step 4: Show PIN ──────────────────────
+// ═══════════════════════════════════════════
+// Status subcommand
+// ═══════════════════════════════════════════
 
-  if (cfg.auth) {
-    console.log(`  \u{1F511} PIN:        ${server.auth.pin}`);
-  } else {
-    console.log('  \u{1F513} Auth:       disabled');
+function statusCommand() {
+  const status = AgentDeckServer.readStatus();
+
+  if (!status) {
+    console.log('');
+    console.log('  AgentDeck server is not running.');
+    console.log('  Run: agentdeck');
+    console.log('');
+    return;
   }
 
-  if (server.ntfy.enabled) {
-    console.log(`  \u{1F514} ntfy:       ${cfg.ntfyTopic}`);
+  // Verify PID is alive
+  if (!isPidAlive(status.pid)) {
+    AgentDeckServer.deleteStatus();
+    console.log('');
+    console.log('  AgentDeck server is not running (stale status cleaned up).');
+    console.log('  Run: agentdeck');
+    console.log('');
+    return;
+  }
+
+  console.log('');
+  console.log('  \u{1F3AE} AgentDeck — Status');
+  console.log('  \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500');
+  console.log('');
+  showServerInfo(status);
+
+  // Show sessions
+  const sessions = listSessions();
+  if (sessions.length > 0) {
+    console.log('  Sessions:');
+    for (const s of sessions) {
+      const marker = s.isClaude ? ' \u2605' : '';
+      const att = s.attached ? ' (attached)' : '';
+      console.log(`    ${s.name}${marker}${att}`);
+    }
   } else {
-    console.log('  \u{1F514} ntfy:       disabled (run "agentdeck setup" to enable)');
+    console.log('  No active sessions');
+  }
+  console.log('');
+}
+
+// ═══════════════════════════════════════════
+// Stop subcommand
+// ═══════════════════════════════════════════
+
+function stopCommand() {
+  const status = AgentDeckServer.readStatus();
+
+  if (!status) {
+    console.log('');
+    console.log('  AgentDeck server is not running.');
+    console.log('');
+    return;
+  }
+
+  console.log('');
+  console.log('  Stopping AgentDeck server...');
+
+  // Send SIGTERM to server process
+  if (status.pid && isPidAlive(status.pid)) {
+    try {
+      process.kill(status.pid, 'SIGTERM');
+    } catch {}
+  }
+
+  // Kill the hidden tmux session
+  if (sessionExists('_agentdeck')) {
+    try {
+      require('child_process').execSync('tmux kill-session -t _agentdeck', {
+        encoding: 'utf-8',
+        timeout: 5000,
+      });
+    } catch {}
+  }
+
+  // Clean up status file
+  AgentDeckServer.deleteStatus();
+
+  const sessions = listSessions();
+  console.log('  Server stopped.');
+  if (sessions.length > 0) {
+    console.log(`  ${sessions.length} session(s) still running (your work is safe).`);
+  }
+  console.log('');
+}
+
+// ═══════════════════════════════════════════
+// Helper functions
+// ═══════════════════════════════════════════
+
+/**
+ * Check if the AgentDeck server is running:
+ * 1. Read status file
+ * 2. Verify PID is alive
+ * 3. Health check HTTP endpoint
+ */
+async function isServerRunning(port) {
+  const status = AgentDeckServer.readStatus();
+  if (!status) return false;
+
+  // Check PID is alive
+  if (!status.pid || !isPidAlive(status.pid)) {
+    AgentDeckServer.deleteStatus();
+    return false;
+  }
+
+  // Health check
+  const healthy = await checkHealth(status.port || port);
+  if (!healthy) {
+    AgentDeckServer.deleteStatus();
+    return false;
+  }
+
+  return true;
+}
+
+function isPidAlive(pid) {
+  try {
+    process.kill(pid, 0); // Signal 0 = check existence
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function checkHealth(port) {
+  return new Promise(resolve => {
+    const req = http.get(`http://127.0.0.1:${port}/api/health`, { timeout: 3000 }, res => {
+      let body = '';
+      res.on('data', chunk => { body += chunk; });
+      res.on('end', () => {
+        try {
+          const data = JSON.parse(body);
+          resolve(data.app === 'agentdeck');
+        } catch {
+          resolve(false);
+        }
+      });
+    });
+    req.on('error', () => resolve(false));
+    req.on('timeout', () => { req.destroy(); resolve(false); });
+  });
+}
+
+function waitForServer(port, timeout = 20000) {
+  const start = Date.now();
+  return new Promise(resolve => {
+    const poll = async () => {
+      if (Date.now() - start > timeout) return resolve(false);
+      const ok = await checkHealth(port);
+      if (ok) return resolve(true);
+      setTimeout(poll, 500);
+    };
+    poll();
+  });
+}
+
+function waitForTunnel(timeout = 15000) {
+  const start = Date.now();
+  return new Promise(resolve => {
+    const poll = () => {
+      if (Date.now() - start > timeout) {
+        // Return whatever we have
+        return resolve(AgentDeckServer.readStatus());
+      }
+      const status = AgentDeckServer.readStatus();
+      if (status && status.tunnelUrl) return resolve(status);
+      setTimeout(poll, 500);
+    };
+    // Give the tunnel a moment before first check
+    setTimeout(poll, 1000);
+  });
+}
+
+function showServerInfo(status) {
+  if (!status) return;
+
+  const localUrl = `http://localhost:${status.port}`;
+  console.log(`  \u{1F4E1} Local:      ${localUrl}`);
+
+  if (status.tunnelUrl) {
+    console.log(`  \u{1F310} Tunnel:     ${status.tunnelUrl}`);
+  } else {
+    console.log('  \u{1F310} Tunnel:     unavailable');
+  }
+
+  if (status.pin) {
+    console.log(`  \u{1F511} PIN:        ${status.pin}`);
   }
 
   console.log('');
 
-  // ── Step 5: Show QR code ──────────────────
+  // Show QR code
+  const connectUrl = status.tunnelUrl || localUrl;
+  showQrCode(connectUrl);
 
-  const connectUrl = tunnelUrl || localUrl;
+  if (status.pin) {
+    console.log(`  PIN: ${status.pin}`);
+    console.log('');
+  }
+}
 
+function showQrCode(url) {
   try {
     const qrcode = require('qrcode-terminal');
     console.log('  Scan to connect:');
     console.log('');
-    // Generate QR with small mode for terminal
-    qrcode.generate(connectUrl, { small: true }, (qr) => {
-      // Indent each line
+    qrcode.generate(url, { small: true }, (qr) => {
       const indented = qr.split('\n').map(line => '  ' + line).join('\n');
       console.log(indented);
     });
   } catch {
-    // Fallback if qrcode-terminal not available
-    console.log(`  \u{1F4F1} Open on phone: ${connectUrl}`);
+    console.log(`  \u{1F4F1} Open on phone: ${url}`);
   }
-
   console.log('');
-  if (cfg.auth) {
-    console.log(`  PIN: ${server.auth.pin}`);
-    console.log('');
-  }
-  console.log('  \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500');
-  console.log('  Press Ctrl+C to stop');
-  console.log('');
-
-  // ── Graceful shutdown ─────────────────────
-
-  process.on('SIGINT', async () => {
-    console.log('\n  Shutting down...');
-    await server.stop();
-    process.exit(0);
-  });
-
-  process.on('SIGTERM', async () => {
-    await server.stop();
-    process.exit(0);
-  });
 }
 
-main().catch(err => {
-  console.error('  Fatal:', err.message);
-  if (err.stack && process.argv.includes('--verbose')) {
-    console.error(err.stack);
+/**
+ * Forward relevant CLI args to the --_server process.
+ * Excludes subcommands and --_server itself.
+ */
+function forwardArgs() {
+  const skip = new Set(['status', 'stop', 'setup', 'config', 'help', '--_server']);
+  const forwarded = [];
+  for (let i = 0; i < args.length; i++) {
+    if (skip.has(args[i])) continue;
+    forwarded.push(args[i]);
   }
-  process.exit(1);
-});
+  return forwarded.join(' ');
+}

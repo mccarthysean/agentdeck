@@ -2,9 +2,9 @@
 
 **Mobile control for your coding agents.**
 
-Monitor, approve, and interact with your AI coding agents from your phone. One command, 30 seconds, no port forwarding.
+One command. Background server, tunnel, Claude session, phone access — all automatic. Monitor, approve, and interact with your AI coding agents from your phone.
 
-AgentDeck attaches to your tmux sessions via node-pty, streams the terminal to your phone over WebSocket + xterm.js, and sends push notifications when your agent needs permission. Non-blocking by design -- you can respond from your phone or the terminal.
+AgentDeck handles everything: it starts a background server, opens a Cloudflare tunnel, creates a Claude Code session, and attaches you — in one command. Your phone gets a live terminal, push notifications, and one-tap approve/deny. Non-blocking by design — you can respond from your phone or the terminal.
 
 ---
 
@@ -28,70 +28,79 @@ That's it. No config files, no build step, no accounts.
 
 ## Features
 
-- **Live terminal on your phone** -- full xterm.js rendering with touch-friendly controls
-- **Push notifications** -- get notified instantly when Claude Code asks for permission (Web Push + ntfy)
-- **Phone notifications via ntfy** -- auto-enabled from your git email. Install the ntfy app, subscribe to the topic, done. No account, no tokens, no third-party service signup.
-- **One-tap approve/deny** -- respond to permission requests right from the notification
-- **Non-blocking** -- never stalls your agent; phone and terminal both work simultaneously
-- **Auto-tunnel** -- public HTTPS URL via Cloudflare Tunnel (no interstitial page), falls back to localtunnel
-- **QR code** -- scan from your phone to connect instantly, no typing URLs
-- **Auto-launch** -- configure your agent once (`agentdeck config --agent claude`), and it auto-creates a tmux session and launches it
-- **PIN authentication** -- random 4-digit PIN with HMAC-SHA256 session tokens
-- **Installable PWA** -- add to home screen, works offline-capable with Service Worker
-- **Session picker** -- switch between multiple tmux sessions from the phone
-- **Quick action bar** -- y/n, Enter, Esc, Ctrl+C, Ctrl+D buttons for common inputs
-- **Agent-agnostic** -- the tmux layer works with ANY terminal agent (Claude Code, Codex, Aider, etc.)
-- **Claude Code hooks** -- richer UX for Claude Code with push notifications and one-tap approve/deny
-- **Zero build step** -- vanilla JS frontend, xterm.js loaded from CDN
-- **5 dependencies** -- node-pty, ws, web-push, localtunnel, qrcode-terminal
+- **One command to start** — `agentdeck` starts the server, creates a session, and attaches you. Run it again for another session.
+- **Auto-named sessions** — sessions are named `claude-1`, `claude-2`, etc. No naming, no conflicts.
+- **Background server** — the server runs hidden in the background. No dedicated terminal needed.
+- **`status` / `stop` subcommands** — check what's running or shut down the server without losing sessions
+- **Live terminal on your phone** — full xterm.js rendering with touch-friendly controls
+- **Push notifications** — get notified instantly when Claude Code asks for permission (Web Push + ntfy)
+- **Phone notifications via ntfy** — auto-enabled from your git email. Install the ntfy app, subscribe to the topic, done. No account, no tokens, no third-party service signup.
+- **One-tap approve/deny** — respond to permission requests right from the notification
+- **Non-blocking** — never stalls your agent; phone and terminal both work simultaneously
+- **Auto-tunnel** — public HTTPS URL via Cloudflare Tunnel (no interstitial page), falls back to localtunnel
+- **QR code** — scan from your phone to connect instantly, no typing URLs
+- **Phone auto-refresh** — session list updates every 5 seconds, so new sessions appear on your phone automatically
+- **PIN authentication** — random 4-digit PIN with HMAC-SHA256 session tokens
+- **Installable PWA** — add to home screen, works offline-capable with Service Worker
+- **Session picker** — switch between multiple sessions from the phone as they appear
+- **Quick action bar** — y/n, Enter, Esc, Ctrl+C, Ctrl+D buttons for common inputs
+- **Agent-agnostic** — works with ANY terminal agent (Claude Code, Codex, Aider, etc.)
+- **Claude Code hooks** — richer UX for Claude Code with push notifications and one-tap approve/deny
+- **Zero build step** — vanilla JS frontend, xterm.js loaded from CDN
+- **5 dependencies** — node-pty, ws, web-push, localtunnel, qrcode-terminal
 
 ---
 
 ## Quick Start
 
-### 1. Configure your agent (one-time)
+### 1. Run AgentDeck
 
 ```bash
-npx agentdeck config --agent claude
+agentdeck
 ```
 
-This saves "claude" as your default agent. Next time you run `agentdeck`, it will automatically create a tmux session and launch Claude Code.
-
-### 2. Run AgentDeck
-
-```bash
-npx agentdeck
-```
+That's it. AgentDeck will:
+- Start a background server with a Cloudflare tunnel
+- Create a `claude-1` session running Claude Code
+- Attach you to the session
+- Show a QR code and PIN for your phone
 
 Output:
 
 ```
-  AgentDeck -- Mobile control for your coding agents
-  ------------------------------------------------
+  🎮 AgentDeck
+  ────────────────────────────────────────────────
 
-  Launching:  claude in tmux "agent"
-  Tunnel:     https://random-words.trycloudflare.com
-  Local:      http://localhost:3300
-  PIN:        4821
+  Starting server...
+  📡 Local:      http://localhost:3300
+  🌐 Tunnel:     https://random-words.trycloudflare.com
+  🔑 PIN:        4821
 
   Scan to connect:
 
   [QR CODE]
 
-  ------------------------------------------------
-  Press Ctrl+C to stop
+  🚀 Created session: claude-1
+
+  Attaching to claude-1... (detach: Ctrl+B d)
 ```
 
-### 3. Scan the QR code on your phone
+When you're done (or want to start another session), press **Ctrl+B d** to detach:
 
-Enter the PIN. You now have a live terminal and push notifications.
+```
+  👋 Detached from claude-1
 
-If you already have tmux sessions running, AgentDeck auto-detects them -- no need to configure an agent.
+  Quick commands:
+    tmux attach -t claude-1       Re-attach to this session
+    agentdeck                     Create a new session
+    agentdeck status              Show QR code and sessions
+    agentdeck stop                Stop the background server
+```
 
-### 4. (Optional) Set up Claude Code hooks + phone notifications
+### 2. (Optional) Set up hooks + phone notifications
 
 ```bash
-npx agentdeck setup
+agentdeck setup
 ```
 
 This does two things:
@@ -105,7 +114,18 @@ Install the [ntfy app](https://ntfy.sh) on your phone and subscribe to the topic
 ## How It Works
 
 ```
-Phone (PWA)  <-->  WebSocket  <-->  AgentDeck Server  <-->  node-pty  <-->  tmux session
+agentdeck (orchestrator)
+  ├── Starts background server in hidden tmux session "_agentdeck"
+  ├── Creates claude-1 session, attaches you
+  └── On detach: prints helpful hints
+
+_agentdeck (hidden, background)
+  └── HTTP/WS server + Cloudflare tunnel
+      ├── Writes ~/.agentdeck/status.json
+      ├── Serves phone PWA
+      └── Refreshes session list every 5s → phone auto-updates
+
+Phone (PWA)  <-->  WebSocket  <-->  AgentDeck Server  <-->  node-pty  <-->  tmux sessions
                                           |         \
                                 Claude Code hooks    ntfy.sh --> phone notification
                                 POST here               (auto-enabled from git email)
@@ -120,36 +140,66 @@ When Claude Code asks for permission (e.g., to run a shell command), this is wha
 3. AgentDeck sends notifications in parallel: WebSocket toast to connected clients, Web Push, and ntfy (if configured)
 4. You can tap **Allow** on your phone (sends `y` keystroke to the PTY) or just type `y` in the terminal
 
-Either way works. The agent is never blocked waiting for AgentDeck to decide. This means AgentDeck can go offline, crash, or be slow -- your agent keeps working normally.
+Either way works. The agent is never blocked waiting for AgentDeck to decide. This means AgentDeck can go offline, crash, or be slow — your agent keeps working normally.
 
 ---
 
 ## CLI Usage
 
+### Subcommands
+
 ```
-agentdeck                           Start everything (server + tunnel + agent)
-agentdeck --agent claude            Start and launch "claude" in tmux
+agentdeck                           Start server + create session + attach
+agentdeck                           (again) Detect server + new session + attach
+agentdeck status                    Show QR code, PIN, tunnel URL, sessions
+agentdeck stop                      Stop background server (sessions survive)
 agentdeck setup                     Configure hooks + auto-enable phone notifications
-agentdeck setup --ntfy-topic TOPIC  Configure hooks + use a custom ntfy topic
-agentdeck config --agent claude     Save default agent (persists across runs)
-agentdeck --port 3300               Custom port (default: 3300)
-agentdeck --pin 1234                Set PIN manually (default: random 4-digit)
-agentdeck --no-auth                 Disable PIN authentication (trusted networks only)
-agentdeck --no-tunnel               Skip tunnel (use with Tailscale, local network, etc.)
-agentdeck --subdomain myproject     Request a consistent localtunnel URL
-agentdeck --ntfy-topic TOPIC        Override auto-generated ntfy topic
-agentdeck --ntfy-url URL            Custom ntfy server (default: https://ntfy.sh)
-agentdeck --no-ntfy                 Disable ntfy notifications
-agentdeck --verbose                 Show debug output (HTTP requests, WS connections)
+agentdeck config --agent <cmd>      Save default agent (persists across runs)
+```
+
+### Options
+
+```
+--agent <cmd>       Command to launch in sessions (default: claude)
+--port <n>          Server port (default: 3300)
+--pin <n>           Set PIN manually (default: random 4-digit)
+--subdomain <name>  Consistent tunnel URL across restarts
+--no-auth           Disable PIN authentication
+--no-tunnel         Skip tunnel (use with Tailscale or local network)
+--verbose           Show debug output
+--ntfy-topic <t>    Override auto-generated ntfy topic
+--ntfy-url <url>    ntfy server URL (default: https://ntfy.sh)
+--no-ntfy           Disable ntfy notifications
 ```
 
 ### Examples
 
-Save a default agent so you never have to specify it again:
+First run — server starts, session created, you're attached:
 
 ```bash
-agentdeck config --agent claude
-agentdeck   # launches claude automatically
+agentdeck
+# → Starts server, creates claude-1, attaches you
+```
+
+Second run — server already running, new session created:
+
+```bash
+agentdeck
+# → Detects server, creates claude-2, attaches you
+```
+
+Check what's running:
+
+```bash
+agentdeck status
+# → Shows QR code, PIN, tunnel URL, and active sessions
+```
+
+Stop the server (sessions keep running):
+
+```bash
+agentdeck stop
+# → Server stopped. 2 session(s) still running (your work is safe).
 ```
 
 Run with a custom port and fixed PIN:
@@ -162,6 +212,12 @@ Local network only (no tunnel), auth disabled:
 
 ```bash
 agentdeck --no-tunnel --no-auth
+```
+
+Save a default agent so you never have to specify it:
+
+```bash
+agentdeck config --agent claude
 ```
 
 ---
@@ -220,11 +276,11 @@ Restart Claude Code after configuring hooks.
 
 ## Phone Notifications (ntfy)
 
-[ntfy](https://ntfy.sh) is a free, open-source push notification service. AgentDeck can send notifications to ntfy so you get alerted on your phone when Claude Code needs permission or goes idle -- no account required.
+[ntfy](https://ntfy.sh) is a free, open-source push notification service. AgentDeck can send notifications to ntfy so you get alerted on your phone when Claude Code needs permission or goes idle — no account required.
 
 ### Setup (30 seconds)
 
-1. **Run setup** -- AgentDeck auto-generates a topic from your git email:
+1. **Run setup** — AgentDeck auto-generates a topic from your git email:
 
 ```bash
 npx agentdeck setup
@@ -239,8 +295,8 @@ npx agentdeck setup
 3. **Subscribe** to the topic shown (e.g., `claude-a1b2c3d4e5f6`)
 
 That's it. AgentDeck now sends:
-- **Permission requests** -- priority 5 (urgent), buzzes immediately
-- **Idle/completion notifications** -- priority 3 (default), silent badge
+- **Permission requests** — priority 5 (urgent), buzzes immediately
+- **Idle/completion notifications** — priority 3 (default), silent badge
 
 ### Dedup
 
@@ -259,15 +315,15 @@ npx agentdeck setup --ntfy-topic my-topic --ntfy-url https://ntfy.example.com
 ### How topics are generated
 
 The auto-generated topic is an MD5 hash of your `git config user.email`, truncated to 12 hex characters and prefixed with `claude-`. This is:
-- **Deterministic** -- same email always gives the same topic, so reinstalling doesn't break your phone subscription
-- **Private** -- the topic reveals nothing about your email address
-- **Unique** -- different developers get different topics
+- **Deterministic** — same email always gives the same topic, so reinstalling doesn't break your phone subscription
+- **Private** — the topic reveals nothing about your email address
+- **Unique** — different developers get different topics
 
 You can override with `--ntfy-topic <name>` or disable with `--no-ntfy`.
 
 ### Security note
 
-ntfy topics on ntfy.sh are **public by default** -- anyone who knows (or guesses) your topic name can read your notifications. The auto-generated hash makes this very unlikely. Notifications contain only the tool name and a short summary, never source code or credentials.
+ntfy topics on ntfy.sh are **public by default** — anyone who knows (or guesses) your topic name can read your notifications. The auto-generated hash makes this very unlikely. Notifications contain only the tool name and a short summary, never source code or credentials.
 
 ---
 
@@ -288,9 +344,10 @@ EXPOSE 3300
 Then inside the container:
 
 ```bash
-tmux new -s claude -d "claude"
-npx agentdeck --no-tunnel   # Use Docker port mapping instead
+npx agentdeck --no-tunnel   # Uses Docker port mapping instead of a tunnel
 ```
+
+AgentDeck will start the server, create a session, and attach you — same as on a host machine.
 
 With Docker Compose:
 
@@ -300,8 +357,10 @@ services:
     build: .
     ports:
       - "3300:3300"
+    stdin_open: true
+    tty: true
     command: >
-      bash -c "tmux new -s claude -d 'claude' && npx agentdeck --no-tunnel --no-auth"
+      bash -c "npx agentdeck --no-tunnel --no-auth"
 ```
 
 If the container has internet access, you can use `--subdomain` with localtunnel instead of port mapping.
@@ -330,14 +389,16 @@ If the container has internet access, you can use `--subdomain` with localtunnel
 
 AgentDeck is designed for personal use on development machines. The security model reflects this:
 
-- **PIN authentication** -- a random 4-digit PIN is generated on each server start. Clients exchange the PIN for an HMAC-SHA256 session token. Timing-safe comparison prevents timing attacks.
-- **Hooks are localhost-only** -- the `/api/hook` endpoint only accepts connections from `127.0.0.1` / `::1`. Remote clients cannot inject fake permission requests.
-- **No secrets in push notifications** -- push payloads contain only the tool name and a truncated summary (command name or file path). No source code or credentials are sent.
-- **VAPID keys** -- Web Push uses per-installation VAPID keys stored in `~/.agentdeck/vapid.json`. No third-party push service.
-- **Directory traversal protection** -- static file serving validates that resolved paths stay within the `public/` directory.
-- **Cloudflare Tunnel** -- cloudflared quick tunnels provide a public HTTPS URL with no interstitial page. Combined with the PIN, this is suitable for personal use. Falls back to localtunnel if cloudflared is not installed. For higher security, use `--no-tunnel` with Tailscale or a VPN.
-- **Token per session** -- tokens are derived from the PIN using a per-startup random secret. Restarting the server invalidates all existing tokens.
-- **No persistent state** -- no database, no user accounts. Push subscriptions and VAPID keys in `~/.agentdeck/` are the only persisted data.
+- **PIN authentication** — a random 4-digit PIN is generated on each server start. Clients exchange the PIN for an HMAC-SHA256 session token. Timing-safe comparison prevents timing attacks.
+- **Status file** — `~/.agentdeck/status.json` stores the server PID, port, PIN, and tunnel URL. It contains no secrets beyond the PIN and is readable only by the current user.
+- **Hooks are localhost-only** — the `/api/hook` endpoint only accepts connections from `127.0.0.1` / `::1`. Remote clients cannot inject fake permission requests.
+- **Health endpoint is localhost-only** — `/api/health` is used internally by the orchestrator to detect a running server. It is not exposed through the tunnel.
+- **No secrets in push notifications** — push payloads contain only the tool name and a truncated summary (command name or file path). No source code or credentials are sent.
+- **VAPID keys** — Web Push uses per-installation VAPID keys stored in `~/.agentdeck/vapid.json`. No third-party push service.
+- **Directory traversal protection** — static file serving validates that resolved paths stay within the `public/` directory.
+- **Cloudflare Tunnel** — cloudflared quick tunnels provide a public HTTPS URL with no interstitial page. Combined with the PIN, this is suitable for personal use. Falls back to localtunnel if cloudflared is not installed. For higher security, use `--no-tunnel` with Tailscale or a VPN.
+- **Token per session** — tokens are derived from the PIN using a per-startup random secret. Restarting the server invalidates all existing tokens.
+- **No persistent state** — no database, no user accounts. Push subscriptions and VAPID keys in `~/.agentdeck/` are the only persisted data.
 
 For production or shared environments, use `--no-tunnel` and put AgentDeck behind a reverse proxy with TLS.
 
@@ -376,13 +437,11 @@ agentdeck/
 
 ## Roadmap
 
-- **Multi-agent dashboard** -- monitor multiple agents across multiple tmux sessions from a single phone view
-- **Session grouping** -- organize agents by project
-- **History view** -- browse past permission requests and decisions
-- **Tailscale integration** -- auto-detect Tailscale and skip localtunnel
-- **Custom quick actions** -- configurable action bar buttons
-- **Audio alerts** -- optional sound on permission requests
-- **Agent metrics** -- token usage, tool call counts, session duration
+- **History view** — browse past permission requests and decisions
+- **Tailscale integration** — auto-detect Tailscale and skip tunnel
+- **Custom quick actions** — configurable action bar buttons
+- **Audio alerts** — optional sound on permission requests
+- **Agent metrics** — token usage, tool call counts, session duration
 
 ---
 
@@ -400,17 +459,17 @@ bun run dev   # Starts with --verbose
 ### Requirements
 
 - Node.js >= 18
-- tmux installed and at least one session running
+- tmux installed
 
 ### Design principles
 
-- **Zero build step** -- no bundler, no transpiler. Vanilla JS served directly.
-- **Minimal dependencies** -- every dependency must justify its existence.
-- **Non-blocking** -- AgentDeck must never stall the agent it is monitoring.
-- **Phone-first** -- UI decisions favor mobile touch interactions.
+- **Zero build step** — no bundler, no transpiler. Vanilla JS served directly.
+- **Minimal dependencies** — every dependency must justify its existence.
+- **Non-blocking** — AgentDeck must never stall the agent it is monitoring.
+- **Phone-first** — UI decisions favor mobile touch interactions.
 
 ---
 
 ## License
 
-[MIT](LICENSE) -- Sean McCarthy
+[MIT](LICENSE) — Sean McCarthy

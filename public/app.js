@@ -15,6 +15,7 @@ var state = {
   terminal: null,
   fitAddon: null,
   currentSession: null,
+  _lastSessionList: '',
   pendingPermissions: new Map(),
   reconnectAttempts: 0,
   maxReconnectAttempts: 15,
@@ -307,6 +308,11 @@ function handleTerminalCatchup(msg) {
 }
 
 function handleSessions(msg) {
+  // Skip DOM rebuild if session list hasn't changed
+  var names = (msg.sessions || []).map(function(s) { return s.name; }).join(',');
+  if (names === state._lastSessionList) return;
+  state._lastSessionList = names;
+
   var picker = document.getElementById('session-picker');
   picker.innerHTML = '';
 
